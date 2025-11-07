@@ -45,7 +45,7 @@ AS
 BEGIN
     IF @NewStatus NOT IN ('Yes', 'No')
     BEGIN
-        RAISERROR('Giá trị trạng thái không hợp lệ. Chỉ được dùng Yes hoặc No.', 16, 1);
+        RAISERROR('Error.', 16, 1);
         RETURN;
     END
 
