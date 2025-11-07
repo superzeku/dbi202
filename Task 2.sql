@@ -1,13 +1,12 @@
 ﻿CREATE PROCEDURE sp_CreatePrescription
-    @AppointmentID INT,
     @MedicineName NVARCHAR(100),
     @Dosage NVARCHAR(50),
     @Frequency NVARCHAR(50),
     @Instructions NVARCHAR(255)
 AS
 BEGIN
-    INSERT INTO prescription (appointment_id, medicine_name, dosage, frequency, instructions)
-    VALUES (@AppointmentID, @MedicineName, @Dosage, @Frequency, @Instructions);
+    INSERT INTO prescription (medicine_name, dosage, frequency, instructions)
+    VALUES (@MedicineName, @Dosage, @Frequency, @Instructions);
 END;
 GO
 
