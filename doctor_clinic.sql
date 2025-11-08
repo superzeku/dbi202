@@ -272,7 +272,7 @@ AS
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM appointment WHERE appointment_id = @AppointmentID)
     BEGIN
-        PRINT '❌ Error: Appointment ID does not exist!';
+        PRINT 'Appointment ID does not exist!';
         RETURN;
     END
     SELECT 
