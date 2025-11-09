@@ -358,6 +358,95 @@ BEGIN
 END;
 EXEC sp_GetTotalRevenueByDoctor @DoctorID = 'D001';
 
+CREATE OR ALTER PROCEDURE sp_CreateAppointment
+    @patient_id VARCHAR(10),
+    @doctor_id VARCHAR(10),
+    @appointment_datetime DATETIME,
+    @reason NVARCHAR(255)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF NOT EXISTS (SELECT 1 FROM patient WHERE patient_id = @patient_id)
+    BEGIN
+        RAISERROR(N'Bệnh nhân không tồn tại', 16, 1);
+        RETURN;
+    END
+
+    IF NOT EXISTS (SELECT 1 FROM doctor WHERE doctor_id = @doctor_id)
+    BEGIN
+        RAISERROR(N'Bác sĩ không tồn tại', 16, 1);
+        RETURN;
+    END
+
+    DECLARE @default_status VARCHAR(10);
+    SELECT TOP 1 @default_status = app_status_id 
+    FROM appointment_status 
+    WHERE name = N'Pending';
+
+    INSERT INTO appointment (patient_id, doctor_id, appointment_datetime, status_id, reason)
+    VALUES (@patient_id, @doctor_id, @appointment_datetime, @default_status, @reason);
+END;
+
+CREATE OR ALTER PROCEDURE sp_UpdateAppointmentStatus
+    @appointment_id VARCHAR(10),
+    @new_status_id VARCHAR(10)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF NOT EXISTS (SELECT 1 FROM appointment WHERE appointment_id = @appointment_id)
+    BEGIN
+        RAISERROR(N'Lịch hẹn không tồn tại', 16, 1);
+        RETURN;
+    END
+
+    UPDATE appointment
+    SET status_id = @new_status_id
+    WHERE appointment_id = @appointment_id;
+END;
+
+CREATE OR ALTER PROCEDURE sp_GetAppointmentsByDoctor
+    @doctor_id VARCHAR(10),
+    @from_date DATE = NULL,
+    @to_date DATE = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT 
+        a.appointment_id,
+        a.appointment_datetime,
+        a.reason,
+        p.first_name + ' ' + p.last_name AS patient_name,
+        s.name AS status_name
+    FROM appointment a
+    JOIN patient p ON a.patient_id = p.patient_id
+    JOIN appointment_status s ON a.status_id = s.app_status_id
+    WHERE a.doctor_id = @doctor_id
+      AND (@from_date IS NULL OR a.appointment_datetime >= @from_date)
+      AND (@to_date IS NULL OR a.appointment_datetime <= @to_date)
+    ORDER BY a.appointment_datetime;
+END;
+
+CREATE OR ALTER PROCEDURE sp_GetAppointmentsByPatient
+    @patient_id VARCHAR(10)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT 
+        a.appointment_id,
+        a.appointment_datetime,
+        a.reason,
+        d.first_name + ' ' + d.last_name AS doctor_name,
+        s.name AS status_name
+    FROM appointment a
+    JOIN doctor d ON a.doctor_id = d.doctor_id
+    JOIN appointment_status s ON a.status_id = s.app_status_id
+    WHERE a.patient_id = @patient_id
+    ORDER BY a.appointment_datetime DESC;
+END;
 -- Trigger
 
 CREATE TRIGGER trg_AutoCreateBillAfterAppointment
