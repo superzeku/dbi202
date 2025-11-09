@@ -214,6 +214,8 @@ values
 ('R019', 'Melatonin 3mg', '1 tablet', 'At bedtime', 'Take 30 minutes before sleep'),
 ('R020', 'Multivitamin', '1 tablet', 'Once daily', 'Take after breakfast')
 
+
+-- Procedure
 ﻿CREATE PROCEDURE sp_CreatePrescription
     @AppointmentID VARCHAR(10),
     @MedicineName NVARCHAR(100),
@@ -447,6 +449,63 @@ BEGIN
     WHERE a.patient_id = @patient_id
     ORDER BY a.appointment_datetime DESC;
 END;
+
+-- Function
+CREATE OR ALTER FUNCTION fn_GetTotalPaidByPatient(@PatientID VARCHAR(10))
+RETURNS DECIMAL(12,2)
+AS
+BEGIN
+    DECLARE @Total DECIMAL(12,2);
+
+    SELECT @Total = ISNULL(SUM(pb.amount), 0)
+    FROM patient_bill pb
+    JOIN appointment a ON pb.appointment_id = a.appointment_id
+    WHERE a.patient_id = @PatientID
+      AND pb.bill_status_id = 'B002';  -- chỉ tính hóa đơn đã thanh toán
+
+    RETURN @Total;
+END;
+GO
+
+CREATE OR ALTER FUNCTION fn_CountAppointmentsByDoctor(
+    @DoctorID VARCHAR(10),
+    @Date DATE
+)
+RETURNS INT
+AS
+BEGIN
+    DECLARE @Count INT;
+
+    SELECT @Count = COUNT(*)
+    FROM appointment
+    WHERE doctor_id = @DoctorID
+      AND CAST(appointment_datetime AS DATE) = @Date;
+
+    RETURN ISNULL(@Count, 0);
+END;
+GO
+
+-- View
+CREATE OR ALTER VIEW vw_AppointmentSummary
+AS
+SELECT 
+    a.appointment_id,
+    a.appointment_datetime,
+    a.reason,
+    p.first_name + ' ' + p.last_name AS patient_name,
+    d.first_name + ' ' + d.last_name AS doctor_name,
+    s.name AS appointment_status,
+    ISNULL(pb.amount, 0) AS bill_amount,
+    bs.name AS bill_status,
+    pm.name AS payment_method
+FROM appointment a
+JOIN patient p ON a.patient_id = p.patient_id
+JOIN doctor d ON a.doctor_id = d.doctor_id
+JOIN appointment_status s ON a.status_id = s.app_status_id
+LEFT JOIN patient_bill pb ON a.appointment_id = pb.appointment_id
+LEFT JOIN bill_status bs ON pb.bill_status_id = bs.bill_status_id
+LEFT JOIN payment_method pm ON pb.payment_method_id = pm.payment_method_id;
+
 -- Trigger
 
 CREATE TRIGGER trg_AutoCreateBillAfterAppointment
@@ -511,3 +570,4 @@ INSERT INTO appointment (patient_id, doctor_id, appointment_datetime, status_id,
 VALUES ('P001', 'D001', '2025-11-10 09:00', 'A001', N'Lịch mới, không trùng.');
 INSERT INTO appointment (patient_id, doctor_id, appointment_datetime, status_id, note)
 VALUES ('P002', 'D001', '2025-11-10 09:00', 'A001', N'Trùng giờ với bác sĩ D001.');
+
