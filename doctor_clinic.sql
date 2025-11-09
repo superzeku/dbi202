@@ -357,3 +357,68 @@ BEGIN
     GROUP BY d.doctor_id, d.first_name, d.last_name;
 END;
 EXEC sp_GetTotalRevenueByDoctor @DoctorID = 'D001';
+
+-- Trigger
+
+CREATE TRIGGER trg_AutoCreateBillAfterAppointment
+ON appointment
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    INSERT INTO patient_bill (appointment_id, amount, bill_status_id, payment_method_id, bill_paid_datetime)
+    SELECT 
+        i.appointment_id,
+        NULL AS amount,          
+        'B001' AS bill_status_id,
+        NULL AS payment_method_id,
+        NULL AS bill_paid_datetime                   -- chưa thanh toán
+    FROM inserted i
+    JOIN deleted d 
+    ON i.appointment_id = d.appointment_id
+    WHERE i.status_id = 'A003'      -- trạng thái Completed
+      AND d.status_id <> 'A003'     -- chỉ khi chuyển từ trạng thái khác sang Completed
+      AND NOT EXISTS (              -- tránh tạo trùng hóa đơn
+          SELECT 1 FROM patient_bill pb 
+          WHERE pb.appointment_id = i.appointment_id
+      );
+END;
+
+SELECT appointment_id, status_id FROM appointment WHERE appointment_id = 'R006';
+SELECT * FROM patient_bill WHERE appointment_id = 'R006';
+UPDATE appointment
+SET status_id = 'A002'
+WHERE appointment_id = 'R006';
+SELECT * FROM patient_bill WHERE appointment_id = 'R006';
+
+
+CREATE TRIGGER trg_CheckAppointmentDate
+ON appointment
+INSTEAD OF INSERT
+AS
+BEGIN
+    -- Kiểm tra trùng lịch: cùng doctor_id và appointment_datetime
+    IF EXISTS (
+        SELECT 1
+        FROM appointment a
+        JOIN inserted i 
+            ON a.doctor_id = i.doctor_id
+           AND a.appointment_datetime = i.appointment_datetime
+    )
+    BEGIN
+        RAISERROR('Lịch hẹn này đã bị trùng (bác sĩ có lịch khác tại thời điểm đó).', 16, 1);
+        ROLLBACK TRANSACTION;
+        RETURN;
+    END;
+
+    -- Nếu không trùng, thực hiện chèn bình thường
+    INSERT INTO appointment (patient_id, doctor_id, appointment_datetime, status_id, note)
+    SELECT patient_id, doctor_id, appointment_datetime, status_id, note
+    FROM inserted;
+END;
+
+INSERT INTO appointment (patient_id, doctor_id, appointment_datetime, status_id, note)
+VALUES ('P001', 'D001', '2025-11-10 09:00', 'A001', N'Lịch mới, không trùng.');
+INSERT INTO appointment (patient_id, doctor_id, appointment_datetime, status_id, note)
+VALUES ('P002', 'D001', '2025-11-10 09:00', 'A001', N'Trùng giờ với bác sĩ D001.');
